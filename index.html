@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <!--
+    ============================================
+    App: UML ↔ Code Studio
+    File: index.html (주석 정리/가독성 개선판)
+    Note:
+      - 동작/스타일 안정성을 위해 기존 구조·ID·클래스 유지
+      - 섹션/컴포넌트 기준으로 주석 구획 추가
+      - 접근성 보강(aria-*), 의미 드러나는 소제목/주석 추가
+    ============================================
+  -->
+  <meta charset="UTF-8" />
+  <title>UML ↔ Code Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!--
+    =========================
+    Global Styles & Layout
+    =========================
+    - 전체 색상/여백 변수
+    - 공통 레이아웃(그리드/카드/탭)
+    - 폼 라인/2열 레이아웃
+    - 입력 컨트롤 & 버튼
+    - 코드/미리보기/테이블
+    - 접기/펼치기 & 로딩 오버레이
+  -->
+  <style>
+    /* ---------- CSS Variables (공통 여백/색상/간격) ---------- */
+    :root {
+      --pad: 12px; --gap: 12px;
+      --labelW: 140px;              /* 좌측 라벨 고정 너비 */
+      --placeholder: #8b94af;     /* placeholder 통일 색 */
+      --rowGap: 16px;               /* 폼 라인 세로 간격 */
+      --stackGap: 10px;             /* 토글-컨트롤 기본 간격 */
+    }
+
+    /* ---------- Reset-like ---------- */
+    * { box-sizing: border-box; }
+
+    /* ---------- Page base ---------- */
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Arial, Apple Color Emoji, Segoe UI Emoji;
+      background: #0b1020;
+      color: #e9eefb;
+    }
+
+    /* ---------- Header (상단 고정 바) ---------- */
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #1f2a4a;
+      background: linear-gradient(180deg, #101632, #0b1020);
+      position: sticky; top: 0; z-index: 10;
+    }
+    h1 { margin: 0; font-size: 18px; letter-spacing: .5px; }
+
+    /* ---------- Page container ---------- */
+    .container { padding: 16px 20px; }
+
+    /* ---------- Tabs ---------- */
+    .tabs { display: flex; gap: 8px; margin: 10px 0 16px; flex-wrap: wrap; }
+    .tab-btn {
+      border: 1px solid #214;
+      background: #141b3a; color: #d7e2ff;
+      padding: 8px 12px; border-radius: 8px;
+      cursor: pointer; transition: transform .05s ease, filter .2s;
+    }
+    .tab-btn.active { background: #2a3e8a; border-color: #3a52aa; }
+
+    /* ---------- Panels ---------- */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ---------- Grid / Card ---------- */
+    .grid { display: grid; gap: var(--gap); grid-template-columns: 1fr 1fr; align-items: start; }
+    .card { border: 1px solid #213258; background: #0e1534; border-radius: 12px; padding: var(--pad); overflow: hidden; }
+
+    /* ---------- Rows / Labels ---------- */
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    label { font-size: 13px; color: #99a6d6; }
+
+    /* ===============================
+       Unified Form Layout (좌측 라벨 고정)
+       =============================== */
+    .formline {
+      display: grid;
+      grid-template-columns: var(--labelW) 1fr;
+      gap: var(--gap); align-items: center;
+    }
+    .formline > label { white-space: nowrap; align-self: center; line-height: 36px; padding-top: 0; }
+    .formline select,
+    .formline input[type="text"],
+    .formline textarea { width: 100%; min-width: 0; align-self: center; }
+
+    /* 인접한 폼 라인 사이 수직 간격 */
+    .formline + .formline,
+    .formline + .twocol,
+    .twocol + .formline,
+    .twocol + .twocol { margin-top: var(--rowGap); }
+
+    /* ===============================
+       Two Columns (좌/우 필드쌍)
+       =============================== */
+    .twocol {
+      display: grid;
+      grid-template-columns: var(--labelW) 1fr var(--labelW) 1fr;
+      column-gap: var(--gap); row-gap: var(--rowGap);
+      align-items: start;
+    }
+    .twocol .field { display: contents; } /* 라벨/컨트롤을 grid 슬롯에 그대로 배치 */
+    .twocol label { white-space: nowrap; align-self: center; line-height: 36px; padding-top: 0; }
+    .twocol select,
+    .twocol input[type="text"],
+    .twocol textarea { width: 100%; min-width: 0; align-self: center; }
+
+    /* ===============================
+       Stacks for Radio + Controls
+       - 라디오 토글과 하위 컨트롤을 수직 스택으로 구성
+       =============================== */
+    .control-stack { display: flex; flex-direction: column; gap: var(--stackGap); }
+    /* 토글-컨트롤 간격 0으로 조정하고 싶은 경우 .stack-tight 사용 */
+    .stack-tight { gap: 0; }
+    .stack-tight [id$='-db'], .stack-tight [id$='-man'] { margin-top: 0; }
+    /* 스택 내부 컨트롤 좌측 들여쓰기 제거 */
+    .control-stack .formline { width: 100%; gap: 0; grid-template-columns: 1fr !important; }
+
+    /* ---------- Inputs ---------- */
+    select, input[type="text"] {
+      background: #0d1431; color: #dde7ff;
+      border: 1px solid #223259; border-radius: 8px; padding: 8px;
+      height: 36px;
+    }
+    select, input[type="text"] { width: 100%; min-width: 0; }
+
+    /* ---------- Buttons ---------- */
+    .btn { border: 1px solid #2a3f7c; background: #17235a; color: #e6edff; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: transform .05s ease, filter .2s; }
+    .btn.ghost { background: transparent; }
+    .btn.save { background: #1f6a3f; border-color: #2f9158; }
+    .btn.run  { background: #2d3f9a; border-color: #3f56c4; }
+    .btn.clicked { animation: clickflash 180ms ease; }
+    .btn.busy { opacity: .7; cursor: progress; }
+
+    @keyframes clickflash {
+      0% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(.98); filter: brightness(1.25); }
+      100% { transform: scale(1); filter: brightness(1); }
+    }
+
+    .help { font-size: 12px; color: #93a3da; }
+
+    /* ---------- Textareas & Code preview ---------- */
+    textarea {
+      width: 100%;
+      min-height: 52vh;
+      background: #0b1230; color: #eaf1ff;
+      border: 1px solid #233566; border-radius: 12px; padding: 12px;
+      resize: vertical;
+    }
+    textarea::placeholder { color: var(--placeholder); opacity: .75; }
+
+    pre.code {
+      width: 100%; min-height: 52vh;
+      background: #0b1230; color: #eaf1ff;
+      border: 1px solid #233566; border-radius: 12px; padding: 12px;
+      overflow: auto; white-space: pre;
+    }
+    pre.code:empty::before { content: "생성된 소스코드가 여기에 표시됩니다."; color: var(--placeholder); opacity: .75; }
+
+    /* Mermaid→코드 탭: 입력창 내부 스크롤 고정 */
+    #mm-text { max-height: 60vh; overflow: auto; }
+
+    /* ---------- Diagram preview (흰색 배경) ---------- */
+    .diagram-box { min-height: 52vh; border: 1px dashed #2d427e; border-radius: 12px; padding: 12px; background: #ffffff; color: #000; }
+    .diagram-box svg { background: #ffffff; }
+
+    /* ---------- Misc. UI texts ---------- */
+    .section-title { font-size: 14px; color: #a9b6e5; margin-bottom: 6px; font-weight: 600; }
+    .divider { height: 1px; background: #1a2547; margin: 10px 0; }
+    .caps { text-transform: uppercase; letter-spacing: .5px; font-size: 12px; color: #b9c6f5; }
+    .error { color: #ff8b8b; }
+
+    /* ---------- Radios & dependent blocks ---------- */
+    .radio-row { display: flex; gap: var(--gap); align-items: center; }
+    .radio-row ~ #req-db-block,
+    .radio-row ~ #req-manual-block,
+    .radio-row ~ #code-db-block,
+    .radio-row ~ #code-manual-block { margin-top: var(--rowGap); }
+
+    /* 수동 입력 블록 첫 줄 상단 여백 보강 */
+    #req-manual-block .twocol:first-of-type,
+    #code-manual-block .twocol:first-of-type { margin-top: var(--rowGap); }
+
+    .flex-1 { flex: 1 1 auto; }
+    .hidden { display: none; }
+
+    /* ---------- Tables (DB View) ---------- */
+    .table-wrap { overflow: auto; border: 1px solid #233566; border-radius: 8px; }
+    table.table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    table.table th, table.table td { border-bottom: 1px solid #1a2547; padding: 8px 10px; text-align: left; vertical-align: top; }
+    table.table th { background: #0f1a3f; color: #cbd6ff; position: sticky; top: 0; z-index: 1; }
+    table.table tr:nth-child(even) td { background: #0b1433; }
+    .mono { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+
+    /* 요구사항 표: 컬럼 폭(종류 줄이고 내용 넓힘) */
+    #tbl-req th:nth-child(1), #tbl-req td:nth-child(1) { width: 14%; } /* ID */
+    #tbl-req th:nth-child(2), #tbl-req td:nth-child(2) { width: 12%; } /* 종류 */
+    #tbl-req th:nth-child(3), #tbl-req td:nth-child(3) { width: 24%; } /* 제목 */
+    #tbl-req th:nth-child(4), #tbl-req td:nth-child(4) { width: 50%; } /* 내용 */
+    #tbl-req td:nth-child(4) .mono { word-break: break-word; }
+
+    /* 다이어그램 표: 코드 넓힘 */
+    #tbl-diagram th:nth-child(1), #tbl-diagram td:nth-child(1) { width: 20%; } /* 다이어그램 ID */
+    #tbl-diagram th:nth-child(2), #tbl-diagram td:nth-child(2) { width: 12%; } /* 종류 */
+    #tbl-diagram th:nth-child(3), #tbl-diagram td:nth-child(3) { width: 68%; } /* Mermaid 코드 */
+    #tbl-diagram td:nth-child(3) .mono { word-break: break-word; }
+
+    /* 소스코드 표: 코드 넓힘 */
+    #tbl-code th:nth-child(1), #tbl-code td:nth-child(1) { width: 22%; } /* 코드 ID */
+    #tbl-code th:nth-child(2), #tbl-code td:nth-child(2) { width: 12%; } /* 언어 */
+    #tbl-code th:nth-child(3), #tbl-code td:nth-child(3) { width: 66%; } /* 소스코드 */
+    #tbl-code td:nth-child(3) .mono { word-break: break-word; }
+
+    /* ---------- Collapsible (접기/펼치기) ---------- */
+    .collap-wrap { position: relative; }
+    /* 버튼을 셀 좌측 상단에 고정 */
+    .toggle-more {
+      position: absolute; top: 6px; left: 8px;
+      z-index: 2; margin: 0; display: inline-block; font-size: 12px;
+      color: #9fb2ff; cursor: pointer;
+    }
+    .toggle-more:hover { filter: brightness(1.15); }
+
+    /* 펼침 영역과 버튼 겹침 방지 */
+    .collapsible {
+      position: relative; max-height: 0; overflow: hidden; transition: max-height .2s ease;
+      padding-top: 28px; /* 버튼 높이만큼 여유 */
+    }
+
+    /* ---------- Mini diagram preview (표 내부) ---------- */
+    .diagram-mini { margin-top: 8px; background: #fff; border: 1px dashed #2d427e; border-radius: 8px; padding: 8px; color: #000; }
+    .diagram-mini .mermaid { color: #000; }
+
+    /* ---------- Full-screen loading overlay ---------- */
+    .loading {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.35);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; backdrop-filter: blur(2px);
+    }
+    .loading.hidden { display: none; }
+
+    .loading-card {
+      background: #0e1534; border: 1px solid #3a52aa; border-radius: 12px;
+      padding: 16px 20px; display: flex; gap: 12px; align-items: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,.45);
+    }
+
+    .spinner {
+      width: 22px; height: 22px;
+      border: 3px solid #8aa3ff; border-top-color: transparent;
+      border-radius: 50%; animation: spin 1s linear infinite;
+    }
+    .loading-text { color: #d7e2ff; font-size: 14px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- Minor tweaks ---------- */
+    .radio-row > label.caps { flex-basis: var(--labelW); flex-shrink: 0; }
+    #req-diagram-db, #req-diagram-man,
+    #code-diagram-db, #code-diagram-man,
+    #mm-diagram-db, #mm-diagram-man,
+    #mm-codeid-db, #mm-codeid-man { min-height: 36px; padding: 0; margin: 0; }
+
+    #req-title { width: 100%; }
+    .formline, .twocol { padding-left: 0; }
+  </style>
+</head>
+
+<body>
+  <!-- =========================
+       Header
+       ========================= -->
+  <header>
+    <h1>UML ↔ Code Studio</h1>
+    <div class="help">요구사항/소스코드/다이어그램을 DB에서 불러오거나 직접 입력해서 변환·저장할 수 있습니다.</div>
+  </header>
+
+  <!-- =========================
+       Main Container & Tabs
+       ========================= -->
+  <div class="container">
+    <div class="tabs" role="tablist" aria-label="변환 작업 선택">
+      <!-- 탭 버튼: data-target 값과 아래 section#id 매칭 -->
+      <button class="tab-btn active" data-target="tab-req2mm"  role="tab" aria-selected="true">요구사항 → Mermaid</button>
+      <button class="tab-btn"         data-target="tab-code2mm" role="tab" aria-selected="false">소스코드 → Mermaid</button>
+      <button class="tab-btn"         data-target="tab-mm2code" role="tab" aria-selected="false">Mermaid → 소스코드</button>
+      <button class="tab-btn"         data-target="tab-db"      role="tab" aria-selected="false">데이터베이스</button>
+      <span class="flex-1" aria-hidden="true"></span>
+      <button id="btn-refresh-all" class="btn ghost" title="DB/목록 새로고침">목록 새로고침</button>
+    </div>
+
+    <!-- =======================================================
+         Tab 1. 요구사항 → Mermaid
+         - 입력 소스: DB 또는 직접입력
+         - 출력: Mermaid 코드 / 미리보기, 다이어그램 저장
+         ======================================================= -->
+    <section id="tab-req2mm" class="panel active" role="tabpanel" aria-labelledby="요구사항에서-다이어그램">
+      <div class="grid">
+        <!-- 좌: 입력 영역 -->
+        <div class="card">
+          <div class="section-title">입력</div>
+
+          <!-- 입력 방식 선택 (DB/직접) -->
+          <div class="row radio-row">
+            <label class="caps">요구사항 입력 방식</label>
+            <label><input type="radio" name="reqMode" value="db" checked> DB에서 불러오기</label>
+            <label><input type="radio" name="reqMode" value="manual"> 직접 입력</label>
+          </div>
+
+          <!-- DB 입력 모드 -->
+          <div id="req-db-block">
+            <div class="row formline">
+              <label>요구사항 종류</label>
+              <select id="req-type" aria-label="요구사항 종류 필터">
+                <option value="">(전체)</option>
+                <option value="SYS">체계 요구사항</option>
+                <option value="SW">SW 요구사항</option>
+                <option value="SW_DES">SW 설계 요구사항</option>
+                <option value="SW_TEST">SW TEST 요구사항</option>
+              </select>
+            </div>
+            <div class="row formline">
+              <label>요구사항 선택</label>
+              <select id="req-select" aria-label="요구사항 선택 목록"></select>
+            </div>
+          </div>
+
+          <!-- 직접 입력 모드 -->
+          <div id="req-manual-block" class="hidden">
+            <div class="row twocol">
+              <div class="field">
+                <label>요구사항 ID</label>
+                <input id="req-id" type="text" placeholder="예: SYS-REQ-001" />
+              </div>
+              <div class="field">
+                <label>요구사항 종류</label>
+                <select id="req-type-man">
+                  <option value="SYS">체계 요구사항</option>
+                  <option value="SW">SW 요구사항</option>
+                  <option value="SW_DES">SW 설계 요구사항</option>
+                  <option value="SW_TEST">SW TEST 요구사항</option>
+                </select>
+              </div>
+            </div>
+            <div class="row" style="margin-top:6px;"><label>제목</label></div>
+            <div class="row formline"><label class="visually-hidden" aria-hidden="true"></label><input id="req-title" type="text" placeholder="제목" /></div>
+            <div class="row" style="margin-top:6px;"><label>내용</label></div>
+            <textarea id="req-desc" placeholder="요구사항 내용을 입력하세요"></textarea>
+            <div class="row" style="margin-top:6px;">
+              <button class="btn save" id="btn-save-req" title="요구사항을 DB에 저장">요구사항 저장</button>
+              <span class="help">DB에 저장됩니다.</span>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- 다이어그램 종류/ID -->
+          <div class="row twocol">
+            <div class="field">
+              <label>다이어그램 종류</label>
+              <select id="req-diagram-kind">
+                <option value="usecase">usecase</option>
+                <option value="sequence">sequence</option>
+                <option value="class">class</option>
+                <option value="activity">activity</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>다이어그램 ID</label>
+              <!-- 라디오 토글 + DB/직접입력 -->
+              <div class="control-stack stack-tight">
+                <div class="row">
+                  <label><input type="radio" name="reqDiagramMode" value="db" checked> DB에서 선택</label>
+                  <label><input type="radio" name="reqDiagramMode" value="manual"> 직접 입력</label>
+                </div>
+                <!-- DB 선택 -->
+                <div id="req-diagram-db">
+                  <div class="row formline" style="grid-template-columns: 1fr;">
+                    <select id="req-diagram-select" aria-label="다이어그램 선택 목록"></select>
+                  </div>
+                </div>
+                <!-- 직접 입력 -->
+                <div id="req-diagram-man" class="hidden">
+                  <div class="row formline" style="grid-template-columns: 1fr;">
+                    <input id="req-diagram-id" type="text" placeholder="예: DIAG-001" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 변환 실행 -->
+          <div class="row" style="margin-top:10px;">
+            <button class="btn run" id="btn-req2mm" title="요구사항으로부터 Mermaid 생성">Mermaid 생성</button>
+          </div>
+          <div class="row"><span id="req2mm-error" class="error" role="status" aria-live="polite"></span></div>
+        </div>
+
+        <!-- 우: 결과 영역 -->
+        <div class="card">
+          <div class="section-title">결과</div>
+          <div><label for="req2mm-output">Mermaid 코드</label></div>
+          <textarea id="req2mm-output" placeholder="생성된 Mermaid 코드가 여기에 표시됩니다."></textarea>
+          <div class="row" style="margin-top:8px;">
+            <button class="btn save" id="btn-save-req-diagram" title="Mermaid를 DB 다이어그램으로 저장">다이어그램 저장</button>
+            <span class="help">DB에 저장됩니다.</span>
+          </div>
+
+          <!-- 미리보기 -->
+          <div style="margin-top:10px;">
+            <div class="section-title">미리보기</div>
+            <div id="req2mm-view" class="diagram-box" aria-label="생성된 다이어그램 미리보기"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================
+         Tab 2. 소스코드 → Mermaid
+         - 입력 소스: DB 또는 직접입력
+         - 옵션: SW TEST 요구사항 연결
+         - 출력: Mermaid 코드 / 미리보기, 다이어그램 저장
+         ======================================================= -->
+    <section id="tab-code2mm" class="panel" role="tabpanel">
+      <div class="grid">
+        <!-- 좌: 입력 -->
+        <div class="card">
+          <div class="section-title">입력</div>
+
+          <!-- 입력 방식 선택 (DB/직접) -->
+          <div class="row radio-row">
+            <label class="caps">소스코드 입력 방식</label>
+            <label><input type="radio" name="codeMode" value="db" checked> DB에서 불러오기</label>
+            <label><input type="radio" name="codeMode" value="manual"> 직접 입력</label>
+          </div>
+
+          <!-- DB 입력 -->
+          <div id="code-db-block">
+            <div class="row formline">
+              <label>소스코드 목록</label>
+              <select id="code-select" aria-label="소스코드 선택 목록"></select>
+            </div>
+          </div>
+
+          <!-- 직접 입력 -->
+          <div id="code-manual-block" class="hidden">
+            <div class="row twocol">
+              <div class="field"><label>소스코드 ID</label><input id="code-id" type="text" placeholder="예: CODE-001" /></div>
+              <div class="field">
+                <label>언어</label>
+                <select id="code-lang">
+                  <option>C</option><option>C++</option><option>C#</option><option>Java</option><option>Python</option>
+                </select>
+              </div>
+            </div>
+            <div class="row" style="margin-top:6px;"><label>소스코드</label></div>
+            <textarea id="code-text" placeholder="// 여기에 코드를 입력하세요"></textarea>
+            <div class="row" style="margin-top:6px;">
+              <button class="btn save" id="btn-save-code" title="소스코드를 DB에 저장">소스코드 저장</button>
+              <span class="help">DB에 저장됩니다.</span>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- (선택) SW 요구사항 연결 -->
+          <div class="row formline" style="margin-top:8px;">
+            <label>SW 요구사항 ID 연결 (선택)</label>
+          </div>
+          <div class="row twocol">
+            <div class="field">
+              <label>요구사항 종류</label>
+              <select id="st-join-type">
+                <option value="">(선택)</option>
+                <option value="SYS">체계 요구사항</option>
+                <option value="SW">SW 요구사항</option>
+                <option value="SW_DES">SW 설계 요구사항</option>
+                <option value="SW_TEST">SW TEST 요구사항</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>요구사항 선택</label>
+              <select id="st-join-select"></select>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- 출력 다이어그램 지정 -->
+          <div class="row formline" style="margin-top:8px;">
+            <label>출력 형식</label>
+          </div>
+          <div class="row twocol">
+            <div class="field">
+              <label>다이어그램 종류</label>
+              <select id="code-diagram-kind">
+                <option value="usecase">usecase</option>
+                <option value="sequence">sequence</option>
+                <option value="class">class</option>
+                <option value="activity">activity</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>다이어그램 ID</label>
+              <div class="control-stack stack-tight">
+                <div class="row">
+                  <label><input type="radio" name="codeDiagramMode" value="db" checked> DB에서 선택</label>
+                  <label><input type="radio" name="codeDiagramMode" value="manual"> 직접 입력</label>
+                </div>
+                <!-- DB 선택 -->
+                <div id="code-diagram-db">
+                  <div class="row formline" style="grid-template-columns: 1fr;">
+                    <select id="code-diagram-select"></select>
+                  </div>
+                </div>
+                <!-- 직접 입력 -->
+                <div id="code-diagram-man" class="hidden">
+                  <div class="row formline" style="grid-template-columns: 1fr;">
+                    <input id="code-diagram-id" type="text" placeholder="예: DIAG-001" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 변환 실행 -->
+          <div class="row" style="margin-top:10px;">
+            <button class="btn run" id="btn-code2mm" title="소스코드로부터 Mermaid 생성">Mermaid 생성</button>
+          </div>
+          <div class="row"><span id="code2mm-error" class="error" role="status" aria-live="polite"></span></div>
+        </div>
+
+        <!-- 우: 결과 -->
+        <div class="card">
+          <div class="section-title">결과</div>
+          <div><label for="code2mm-output">Mermaid 코드</label></div>
+          <textarea id="code2mm-output" placeholder="생성된 Mermaid 코드가 여기에 표시됩니다."></textarea>
+          <div class="row" style="margin-top:8px;">
+            <button class="btn save" id="btn-save-code-diagram" title="Mermaid를 DB 다이어그램으로 저장">다이어그램 저장</button>
+            <span class="help">DB에 저장됩니다.</span>
+          </div>
+          <div style="margin-top:10px;">
+            <div class="section-title">미리보기</div>
+            <div id="code2mm-view" class="diagram-box" aria-label="생성된 다이어그램 미리보기"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================
+         Tab 3. Mermaid → 소스코드
+         - 입력: DB에서 Mermaid 선택 또는 직접 입력/수정
+         - 옵션: SW TEST 요구사항 연결, 언어/코드ID 지정
+         - 출력: 코드 + 저장
+         ======================================================= -->
+    <section id="tab-mm2code" class="panel" role="tabpanel">
+      <div class="grid">
+        <!-- 좌: 입력 -->
+        <div class="card">
+          <div class="section-title">입력</div>
+
+          <!-- 다이어그램 종류/ID (DB/직접) -->
+          <div class="row twocol">
+            <div class="field">
+              <label>다이어그램 종류</label>
+              <select id="mm-diagram-kind">
+                <option value="usecase">usecase</option>
+                <option value="sequence">sequence</option>
+                <option value="class">class</option>
+                <option value="activity">activity</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>다이어그램 ID</label>
+              <div class="control-stack stack-tight">
+                <div class="row">
+                  <label><input type="radio" name="mmDiagramMode" value="db" checked> DB에서 선택</label>
+                  <label><input type="radio" name="mmDiagramMode" value="manual"> 직접 입력</label>
+                </div>
+                <!-- DB 선택 -->
+                <div id="mm-diagram-db">
+                  <div class="row formline" style="grid-template-columns: 1fr;">
+                    <select id="mm-diagram-select"></select>
+                  </div>
+                </div>
+                <!-- 직접 입력 -->
+                <div id="mm-diagram-man" class="hidden">
+                  <div class="row formline" style="grid-template-columns: 1fr;">
+                    <input id="mm-diagram-id" type="text" placeholder="예: DIAG-001" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mermaid 직접 입력/수정 영역 -->
+          <div id="mm-text-block" class="hidden">
+            <div class="row" style="margin-top:8px;">
+              <label for="mm-text">Mermaid 코드(직접 입력/수정 가능)</label>
+            </div>
+            <textarea id="mm-text" placeholder="mermaid 코드를 입력하세요 (직접 입력 모드)"></textarea>
+            <div class="row" style="margin-top:8px;">
+              <button class="btn save" id="btn-save-mm-diagram" title="Mermaid 코드를 DB에 저장">Mermaid 코드 저장</button>
+              <span class="help">DB에 저장됩니다.</span>
+            </div>
+            <div class="divider"></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- (선택) SW 요구사항 연결 -->
+          <div class="row formline" style="margin-top:8px;">
+            <label>SW 요구사항 ID 연결 (선택)</label>
+          </div>
+          <div class="row twocol">
+            <div class="field">
+              <label>요구사항 종류</label>
+              <select id="mm-swtest-type">
+                <option value="">(선택)</option>
+                <option value="SYS">체계 요구사항</option>
+                <option value="SW">SW 요구사항</option>
+                <option value="SW_DES">SW 설계 요구사항</option>
+                <option value="SW_TEST">SW TEST 요구사항</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>요구사항 선택</label>
+              <select id="mm-swtest-select"></select>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- 출력 코드 설정 -->
+          <div class="row formline" style="margin-top:8px;">
+            <label>출력 형식</label>
+          </div>
+          <div class="row twocol">
+            <div class="field">
+              <label>언어</label>
+              <select id="mm-lang">
+                <option>C</option><option>C++</option><option>C#</option><option>Java</option><option>Python</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>소스코드 ID</label>
+              <div class="control-stack stack-tight">
+                <div class="row">
+                  <label><input type="radio" name="mmCodeIdMode" value="db" checked> DB에서 선택</label>
+                  <label><input type="radio" name="mmCodeIdMode" value="manual"> 직접 입력</label>
+                </div>
+                <!-- DB 선택 -->
+                <div id="mm-codeid-db">
+                  <div class="row formline" style="grid-template-columns: 1fr;">
+                    <select id="mm-code-select"></select>
+                  </div>
+                </div>
+                <!-- 직접 입력 -->
+                <div id="mm-codeid-man" class="hidden">
+                  <div class="row formline" style="grid-template-columns: 1fr;">
+                    <input id="mm-code-id" type="text" placeholder="예: CODE-001 (빈칸이면 새로 생성)" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 변환 실행 -->
+          <div class="row" style="margin-top:10px;">
+            <button class="btn run" id="btn-mm2code" title="Mermaid로부터 코드 생성/업데이트">코드 생성/업데이트</button>
+          </div>
+          <div class="row"><span id="mm2code-error" class="error" role="status" aria-live="polite"></span></div>
+        </div>
+
+        <!-- 우: 결과(코드) -->
+        <div class="card">
+          <div class="section-title">결과</div>
+          <div><label>생성/업데이트된 소스코드</label></div>
+          <pre id="mm2code-output" class="code" aria-label="생성된 소스코드 미리보기"></pre>
+          <div class="row" style="margin-top:8px;">
+            <button class="btn save" id="btn-save-mm-code" title="생성된 코드를 DB에 저장">소스코드 저장</button>
+            <span class="help">DB에 저장됩니다.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================
+         Tab 4. DB 탭 (요구사항/다이어그램/소스코드 전체 목록)
+         - 각 표에서 긴 본문은 펼치기/접기로 확인
+         ======================================================= -->
+    <section id="tab-db" class="panel" role="tabpanel">
+      <div class="grid">
+        <!-- 요구사항 목록 -->
+        <div class="card" style="grid-column:1 / span 2;">
+          <div class="section-title">요구사항 목록</div>
+          <div class="table-wrap" role="region" aria-label="요구사항 표">
+            <table class="table" id="tbl-req">
+              <thead>
+                <tr><th scope="col">ID</th><th scope="col">종류</th><th scope="col">제목</th><th scope="col">내용 (전체)</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 다이어그램 목록 -->
+        <div class="card">
+          <div class="section-title">다이어그램 목록</div>
+          <div class="table-wrap" role="region" aria-label="다이어그램 표">
+            <table class="table" id="tbl-diagram">
+              <thead>
+                <tr><th scope="col">다이어그램 ID</th><th scope="col">종류</th><th scope="col">Mermaid 코드 (전체)</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 소스코드 목록 -->
+        <div class="card">
+          <div class="section-title">소스코드 목록</div>
+          <div class="table-wrap" role="region" aria-label="소스코드 표">
+            <table class="table" id="tbl-code">
+              <thead>
+                <tr><th scope="col">코드 ID</th><th scope="col">언어</th><th scope="col">소스코드 (전체)</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- =========================
+       Global Loading Overlay
+       ========================= -->
+  <div id="loading" class="loading hidden" aria-live="polite" aria-label="처리 중 오버레이">
+    <div class="loading-card" role="status" aria-label="처리 중">
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="loading-text">처리 중…</div>
+    </div>
+  </div>
+
+  <!-- =========================
+       App Script (Vite served)
+       ========================= -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
